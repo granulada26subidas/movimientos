@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Movimientos</title>
+<style>
+:root{--bg:#f4f6f9;--cd:#fff;--tx:#1b1f24;--mu:#66707c;--ac:#2563eb;--bd:#e0e4ea;--ng:#c0392b;--ps:#1e8e5a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--bg:#101317;--cd:#1a1f26;--tx:#e8ebef;--mu:#98a2b0;--ac:#6ea0ff;--bd:#2a313b;--ng:#ff7b6b;--ps:#4ed08e;color-scheme:dark}}
+*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,system-ui,"Segoe UI",sans-serif}
+header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;background:var(--cd);border-bottom:1px solid var(--bd);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+header h1{font-size:18px;margin:0;flex:1}header small{color:var(--mu)}
+nav{display:flex;gap:6px;padding:10px 16px}
+button,select,input,textarea{font:inherit;color:var(--tx);background:var(--cd);border:1px solid var(--bd);border-radius:10px;padding:8px 12px}
+button{cursor:pointer}button.p{background:var(--ac);border-color:var(--ac);color:#fff}button:disabled{opacity:.45}
+nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+main{padding:0 16px 40px;max-width:1200px;margin:auto}
+.g{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.c{background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:14px}
+.k{font-size:24px;font-weight:600}.mu{color:var(--mu)}.ng{color:var(--ng)}.ps{color:var(--ps)}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:6px 0 12px}
+.w{overflow-x:auto;border:1px solid var(--bd);border-radius:14px;background:var(--cd)}
+table{border-collapse:collapse;width:100%}th,td{padding:8px 10px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:var(--cd);color:var(--mu);font-weight:600}td.n,th.n{text-align:right}tbody tr:active{background:var(--bd)}
+.ch{height:280px;position:relative}
+dialog{border:1px solid var(--bd);border-radius:16px;background:var(--cd);color:var(--tx);width:min(560px,94vw);max-height:90vh;overflow:auto;padding:18px}
+dialog::backdrop{background:#0008}
+label{display:block;margin:8px 0 2px;color:var(--mu);font-size:13px}dialog input,dialog select{width:100%}
+.row{display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap}
+details{padding:6px 0;border-bottom:1px solid var(--bd)}summary{cursor:pointer;display:flex;justify-content:space-between}
+.msg{padding:10px 16px;color:var(--mu)}.err{color:var(--ng)}
+</style></head><body>
+<header id="hd"></header><nav id="nv"></nav><div id="ms" class="msg"></div><main id="mn"></main><dialog id="dlg"></dialog>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+//<core>
+const ex=s=>String(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const un=s=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&#x([0-9a-f]+);/gi,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/&#(\d+);/g,(_,d)=>String.fromCharCode(+d)).replace(/&amp;/g,'&');
+const cn=c=>[...c].reduce((a,ch)=>a*26+ch.charCodeAt(0)-64,0);
+const tx=b=>un([...b.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x=>x[1]).join(''));
+function sst(xml){return[...xml.replace(/<rPh[\s\S]*?<\/rPh>/g,'').matchAll(/<si>([\s\S]*?)<\/si>|<si\/>/g)].map(m=>m[1]?tx(m[1]):'')}
+function parseSheet(xml,ss){const R={};
+ for(const rm of xml.matchAll(/<row r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)){const c={};
+  for(const cm of(rm[2]||'').matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)){
+   const t=(cm[2].match(/\bt="(\w+)"/)||[])[1],b=cm[3]||'',vm=b.match(/<v>([\s\S]*?)<\/v>/);let v=null;
+   if(t==='s'&&vm)v=ss[+vm[1]];else if(t==='inlineStr')v=tx(b);else if(vm)v=t==='str'?un(vm[1]):+vm[1];
+   c[cm[1]]=v}
+  R[+rm[1]]=c}
+ return R}
+const rowRe=n=>new RegExp(`<row r="${n}"[^>]*?(?:/>|>[\\s\\S]*?</row>)`);
+const nov=r=>r.replace(/(<f[ >][\s\S]*?<\/f>)<v>[\s\S]*?<\/v>/g,'$1');
+function mkCell(ref,s,v){const sa=s?` s="${s}"`:'';if(v===null||v==='')return`<c r="${ref}"${sa}/>`;if(typeof v==='number')return`<c r="${ref}"${sa}><v>${v}</v></c>`;return`<c r="${ref}"${sa} t="inlineStr"><is><t xml:space="preserve">${ex(v)}</t></is></c>`}
+function setCell(row,n,col,v,sty){const re=new RegExp(`<c r="${col}${n}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`),m=row.match(re);
+ if(m){const s=(m[1].match(/\bs="(\d+)"/)||[])[1];return row.replace(re,()=>mkCell(col+n,s,v))}
+ const nx=[...row.matchAll(/<c r="([A-Z]+)\d+"/g)].find(x=>cn(x[1])>cn(col)),nc=mkCell(col+n,sty,v);
+ return nx?row.replace(`<c r="${nx[1]}${n}"`,()=>nc+`<c r="${nx[1]}${n}"`):row.replace('</row>',()=>nc+'</row>')}
+function editCells(xml,n,ch){return xml.replace(rowRe(n),r=>{for(const[c,v]of Object.entries(ch))r=setCell(r,n,c,v);return nov(r)})}
+function addClone(xml,n,nn,ch){let r=xml.match(rowRe(n))[0].replace(new RegExp(`(<row r=")${n}"`),(m,p)=>p+nn+'"').replace(new RegExp(`(<c r="[A-Z]+)${n}"`,'g'),(m,p)=>p+nn+'"');
+ for(const[c,v]of Object.entries(ch))r=setCell(r,nn,c,v);return xml.replace('</sheetData>',()=>nov(r)+'</sheetData>')}
+function addRow(xml,n,spans,cells){const r=`<row r="${n}" spans="${spans}">`+cells.map(([c,v,s])=>mkCell(c+n,s,v)).join('')+'</row>';return xml.replace('</sheetData>',()=>r+'</sheetData>')}
+async function locate(z){const T={};
+ for(const f of Object.keys(z.files).filter(f=>/^xl\/tables\/table\d+\.xml$/.test(f))){const x=await z.file(f).async('string');T[(x.match(/<table [^>]*?\bname="([^"]+)"/)||[])[1]]={tf:f,ref:x.match(/\bref="([^"]+)"/)[1],xml:x}}
+ for(const f of Object.keys(z.files).filter(f=>/^xl\/worksheets\/_rels\/sheet\d+\.xml\.rels$/.test(f))){const x=await z.file(f).async('string');for(const t of Object.values(T))if(x.includes('/'+t.tf.split('/').pop()+'"'))t.sf='xl/worksheets/'+f.split('/').pop().replace('.rels','')}
+ return T}
+async function pack(S){const z=S.zip,t1=S.t1,t3=S.t3,dim=(x,l)=>x.replace(/<dimension ref="([A-Z]+\d+):([A-Z]+)\d+"\/>/,(m,a,b)=>`<dimension ref="${a}:${b}${l}"/>`);
+ z.file(t1.sf,dim(S.x1,S.last1));z.file(t3.sf,dim(S.x3,S.last3));
+ z.file(t1.tf,S.tx1.split(t1.ref).join(t1.ref.replace(/\d+$/,S.last1)));
+ const[,c1,c2,o]=t3.ref.match(/([A-Z]+)\d+:([A-Z]+)(\d+)/);
+ z.file(t3.tf,S.tx3.split(`:${c2}${o}"`).join(`:${c2}${S.last3}"`).split(`:${c1}${o}"`).join(`:${c1}${S.last3}"`));
+ let w=await z.file('xl/workbook.xml').async('string');if(!/fullCalcOnLoad/.test(w))w=w.replace(/<calcPr([^>]*?)\/>/,'<calcPr$1 fullCalcOnLoad="1"/>');z.file('xl/workbook.xml',w);
+ if(z.file('xl/calcChain.xml')){z.remove('xl/calcChain.xml');
+  for(const[f,re]of[['xl/_rels/workbook.xml.rels',/<Relationship [^>]*calcChain[^>]*\/>/],['[Content_Types].xml',/<Override [^>]*calcChain[^>]*\/>/]])z.file(f,(await z.file(f).async('string')).replace(re,''))}
+ return z.generateAsync({type:'uint8array',compression:'DEFLATE'})}
+const HDR=['ID','FECHA VALOR','Banco','CONCEPTO','IMPORTE','SALDO','Movimiento','Tipo','Grupo','Detalle','CATEGORIA','SUBCATEGORIA','COMENTARIO'];
+const CD=[['A','id','ID','t'],['B','f','Fecha valor','d'],['C','banco','Banco','t'],['D','con','Concepto','t'],['E','imp','Importe','n'],['F','sal','Saldo','n'],['G','mov','Movimiento','t'],['H','tipo','Tipo','t'],['I','gr','Grupo','t'],['J','det','Detalle','t'],['K','cat','Categoría','t'],['L','sub','Subcategoría','t'],['M','com','Comentario','t']];
+function derive(S){const R=parseSheet(S.x1,S.ss),h=R[1]||{};
+ HDR.forEach((t,i)=>{if(String(h['ABCDEFGHIJKLM'[i]]||'').trim().toUpperCase()!==t.toUpperCase())throw new Error('La hoja Consolidado_Revisado no tiene la estructura esperada (columna '+'ABCDEFGHIJKLM'[i]+'). No se modifica nada.')});
+ S.m=[];
+ for(let n=2;n<=S.last1;n++){const c=R[n]||{};const o={n};CD.forEach(([L,k,,ty])=>{const v=c[L];o[k]=ty==='n'||ty==='d'?(v==null||v===''?null:+v):(v==null?'':String(v))});S.m.push(o)}
+ const C=parseSheet(S.x3,S.ss);S.cats=[];for(let n=4;n<=S.last3;n++){const c=C[n]||{};if(c.D||c.E)S.cats.push({n,cat:String(c.D||''),sub:String(c.E||'')})}}
+//</core>
+const $=s=>document.querySelector(s),LS=localStorage,KEY='77h39rdzvj0ww2z',REDIR=location.origin+location.pathname.replace(/index\.html$/,'');
+const S={tab:'res',cols:JSON.parse(LS.getItem('cols')||'null')||['B','C','D','E','H','K','L','M'],q:'',mes:'',from:'',to:'',dirty:0,ch:[]};
+const h=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const eur=n=>n==null?'':n.toLocaleString('es-ES',{style:'currency',currency:'EUR'});
+const fd=s=>new Date(Date.UTC(1899,11,30)+s*864e5).toISOString().slice(0,10),fes=s=>s==null?'':fd(s).split('-').reverse().join('/'),mk=s=>fd(s).slice(0,7);
+const ml=k=>new Date(k+'-01T12:00').toLocaleDateString('es-ES',{month:'short',year:'2-digit'}),r2=x=>Math.round(x*100)/100;
+const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const asc=o=>JSON.stringify(o).replace(/[\u007f-\uffff]/g,c=>'\\u'+('000'+c.charCodeAt(0).toString(16)).slice(-4));
+async function login(){const v=b64u(crypto.getRandomValues(new Uint8Array(48)));LS.setItem('pk',v);const c=b64u(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));location.href=`https://www.dropbox.com/oauth2/authorize?client_id=${KEY}&response_type=code&code_challenge=${c}&code_challenge_method=S256&token_access_type=offline&redirect_uri=${encodeURIComponent(REDIR)}`}
+function logout(){['at','exp','rt','pk'].forEach(k=>LS.removeItem(k));location.reload()}
+async function tok(b){const r=await fetch('https://api.dropboxapi.com/oauth2/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:KEY,...b})});if(!r.ok)throw new Error('Dropbox rechazó la autorización. Vuelve a conectar.');const j=await r.json();LS.setItem('at',j.access_token);LS.setItem('exp',Date.now()+j.expires_in*1e3-6e4);if(j.refresh_token)LS.setItem('rt',j.refresh_token)}
+async function access(){if(+LS.getItem('exp')>Date.now())return LS.getItem('at');await tok({grant_type:'refresh_token',refresh_token:LS.getItem('rt')});return LS.getItem('at')}
+async function api(path,arg,body){const c=path.startsWith('c:'),u=(c?'https://content.dropboxapi.com/2/':'https://api.dropboxapi.com/2/')+path.replace('c:',''),H={Authorization:'Bearer '+await access()};
+ if(c){H['Dropbox-API-Arg']=asc(arg);if(body)H['Content-Type']='application/octet-stream'}else H['Content-Type']='application/json';
+ const r=await fetch(u,{method:'POST',headers:H,body:c?body:JSON.stringify(arg)});if(!r.ok)throw new Error('Dropbox '+r.status+': '+(await r.text()).slice(0,160));return r}
+async function loadFile(){const r=await(await api('files/list_folder',{path:''})).json(),xs=r.entries.filter(e=>e['.tag']==='file'&&/\.xlsx$/i.test(e.name));
+ if(!xs.length)throw new Error('No hay ningún archivo .xlsx en la carpeta de la app (Apps/…). Muévelo allí y recarga.');
+ S.file=xs.find(e=>/movimientos/i.test(e.name))||xs[0];await openZip(await(await api('c:files/download',{path:S.file.path_lower})).arrayBuffer())}
+async function openZip(b){S.orig=new Uint8Array(b);S.zip=await JSZip.loadAsync(b);const T=await locate(S.zip);S.t1=T.Consolidado_Revisado;S.t3=T.Categorias;
+ if(!S.t1||!S.t3||!S.t1.sf||!S.t3.sf)throw new Error('No encuentro las tablas Consolidado_Revisado y Categorias en el archivo.');
+ S.ss=sst(await S.zip.file('xl/sharedStrings.xml').async('string'));S.x1=await S.zip.file(S.t1.sf).async('string');S.x3=await S.zip.file(S.t3.sf).async('string');S.tx1=S.t1.xml;S.tx3=S.t3.xml;S.dirty=0;S.last1=+S.t1.ref.match(/(\d+)$/)[1];S.last3=+S.t3.ref.match(/(\d+)$/)[1];derive(S);
+ const ms=months();S.from=S.from&&ms.includes(S.from)?S.from:'';S.to=S.to&&ms.includes(S.to)?S.to:''}
+async function save(){const b=$('#sv');b.disabled=true;say('Guardando…');
+ try{const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-'),nm=S.file.name.replace(/\.xlsx$/i,'');
+  await api('c:files/upload',{path:`/Copias/${nm} ${ts}.xlsx`,mode:'add',autorename:true,mute:true},S.orig);
+  const out=await pack(S),r=await(await api('c:files/upload',{path:S.file.path_lower,mode:{'.tag':'update',update:S.file.rev},autorename:false,mute:true},out)).json();
+  S.file.rev=r.rev;await openZip(out);say('Guardado ✓ (copia anterior en Apps/…/Copias)');}
+ catch(e){say(/conflict/i.test(e.message)?'El archivo cambió en Dropbox (¿guardado desde Excel?). Pulsa «Recargar»: se perderán los cambios sin guardar.':e.message,1)}
+ view()}
+function say(t,e){const m=$('#ms');m.textContent=t||'';m.className='msg'+(e?' err':'')}
+function months(){return[...new Set(S.m.filter(x=>x.f!=null).map(x=>mk(x.f)))].sort()}
+function rows(n){const x=S.m.find(y=>y.n===n);return x}
+function refresh(){derive(S);view()}
+// ---- vistas
+function view(){const ok=!!S.m;$('#hd').innerHTML=`<h1>Movimientos <small>${h(S.file?.name||'')}</small></h1>`+(ok?`<button onclick="reload()">Recargar</button><button class="p" id="sv" onclick="save()" ${S.dirty?'':'disabled'}>Guardar${S.dirty?' ('+S.dirty+')':''}</button>`:'')+(LS.getItem('rt')?`<button onclick="logout()">Salir</button>`:'');
+ $('#nv').innerHTML=ok?[['res','Resumen'],['mov','Movimientos'],['cat','Categorías']].map(([k,t])=>`<button class="${S.tab===k?'on':''}" onclick="S.tab='${k}';view()">${t}</button>`).join(''):'';
+ S.ch.forEach(c=>c.destroy());S.ch=[];const m=$('#mn');
+ if(!LS.getItem('rt')){m.innerHTML=`<div class="c"><p>Conecta tu cuenta de Dropbox para leer y guardar tu Excel. La app solo accede a su propia carpeta.</p><button class="p" onclick="login()">Conectar con Dropbox</button></div>`;return}
+ if(!ok){m.innerHTML='';return}
+ ({res:vRes,mov:vMov,cat:vCat})[S.tab](m)}
+async function reload(){if(S.dirty&&!confirm('Hay cambios sin guardar. Se perderán. ¿Continuar?'))return;say('Cargando…');try{S.m=null;await loadFile();say('')}catch(e){say(e.message,1)}view()}
+function vRes(m){const ms=months(),op=v=>ms.map(k=>`<option value="${k}" ${k===v?'selected':''}>${ml(k)}</option>`).join('');
+ const sel=(id,v,lb)=>`<label style="display:inline-flex;gap:6px;align-items:center;margin:0">${lb}<select onchange="S.${id}=this.value;view()"><option value="">${id==='from'?'Inicio':'Fin'}</option>${op(v)}</select></label>`;
+ const ms2=S.m.filter(x=>x.f!=null&&(!S.from||mk(x.f)>=S.from)&&(!S.to||mk(x.f)<=S.to)),mon={},cat={},cm={};let ing=0,gas=0,nc=0;
+ for(const x of ms2){const k=mk(x.f),t=x.tipo.toLowerCase();if(t==='gasto'){const g=-x.imp,c=x.cat||'Sin categoría',sb=x.sub||'Sin subcategoría';gas+=g;(mon[k]??={i:0,g:0}).g+=g;(cat[c]??={t:0,s:{}}).t+=g;cat[c].s[sb]=(cat[c].s[sb]||0)+g;(cm[k]??={})[c]=(cm[k][c]||0)+g}else if(t==='ingreso'){ing+=x.imp;(mon[k]??={i:0,g:0}).i+=x.imp}else nc++}
+ const cs=Object.entries(cat).sort((a,b)=>b[1].t-a[1].t),pos=cs.filter(c=>c[1].t>0);
+ m.innerHTML=`<div class="bar">${sel('from',S.from,'Desde')}${sel('to',S.to,'Hasta')}</div><div class="g" style="margin-bottom:14px"><div class="c"><div class="mu">Ingresos</div><div class="k ps">${eur(ing)}</div></div><div class="c"><div class="mu">Gastos (netos de reembolsos)</div><div class="k ng">${eur(gas)}</div></div><div class="c"><div class="mu">Balance</div><div class="k ${ing-gas<0?'ng':'ps'}">${eur(ing-gas)}</div></div></div>
+ <div class="g"><div class="c"><b>Ingresos y gastos por mes</b><div class="ch"><canvas id="c1"></canvas></div></div><div class="c"><b>Reparto de gastos por categoría</b><div class="ch"><canvas id="c2"></canvas></div></div></div>
+ <div class="c" style="margin-top:14px"><b>Evolución de gastos por categoría</b><div class="ch"><canvas id="c3"></canvas></div></div>
+ <div class="c" style="margin-top:14px"><b>Detalle por categoría</b>${cs.map(([c,v])=>`<details><summary><span>${h(c)}</span><span>${eur(v.t)} · ${gas?Math.round(v.t/gas*100):0}%</span></summary>${Object.entries(v.s).sort((a,b)=>b[1]-a[1]).map(([s,t])=>`<div style="display:flex;justify-content:space-between;padding:4px 0 4px 14px" class="mu"><span>${h(s)}</span><span>${eur(t)}</span></div>`).join('')}</details>`).join('')}${nc?`<p class="mu">${nc} movimientos «No computable» o de otro tipo excluidos de los totales.</p>`:''}</div>`;
+ const css=getComputedStyle(document.documentElement),mu=css.getPropertyValue('--mu'),bd=css.getPropertyValue('--bd');Chart.defaults.color=mu;Chart.defaults.borderColor=bd;
+ const P=['#2563eb','#e07a1f','#1e8e5a','#c0392b','#8e44ad','#16a2b8','#d4a017','#7f8c8d'],ks=Object.keys(mon).sort(),o={maintainAspectRatio:false,responsive:true},mk2=(id,c)=>S.ch.push(new Chart($('#'+id),c));
+ mk2('c1',{type:'bar',data:{labels:ks.map(ml),datasets:[{label:'Ingresos',data:ks.map(k=>r2(mon[k].i)),backgroundColor:'#1e8e5a'},{label:'Gastos',data:ks.map(k=>r2(mon[k].g)),backgroundColor:'#c0392b'}]},options:o});
+ mk2('c2',{type:'doughnut',data:{labels:pos.map(c=>c[0]),datasets:[{data:pos.map(c=>r2(c[1].t)),backgroundColor:pos.map((_,i)=>P[i%8])}]},options:{...o,plugins:{legend:{position:'right'}}}});
+ const top=pos.slice(0,7).map(c=>c[0]);mk2('c3',{type:'bar',data:{labels:ks.map(ml),datasets:[...top,'Otras'].map((c,i)=>({label:c,backgroundColor:P[i%8],data:ks.map(k=>r2(Object.entries(cm[k]||{}).filter(([n])=>c==='Otras'?!top.includes(n):n===c).reduce((a,[,v])=>a+v,0)))}))},options:{...o,scales:{x:{stacked:true},y:{stacked:true}}}})}
+function vMov(m){const ms=months();m.innerHTML=`<div class="bar"><input id="q" placeholder="Buscar…" value="${h(S.q)}" oninput="S.q=this.value;tb()"><select onchange="S.mes=this.value;tb()"><option value="">Todos los meses</option>${ms.map(k=>`<option value="${k}" ${k===S.mes?'selected':''}>${ml(k)}</option>`).join('')}</select><details style="border:0"><summary>Columnas</summary><div class="c" style="position:absolute;z-index:3">${CD.map(c=>`<label style="display:flex;gap:8px;margin:2px 0;color:var(--tx)"><input type="checkbox" style="width:auto" ${S.cols.includes(c[0])?'checked':''} onchange="tg('${c[0]}')">${c[2]}</label>`).join('')}</div></details></div><div class="w"><table id="t"></table></div>`;tb()}
+function tg(c){S.cols=S.cols.includes(c)?S.cols.filter(x=>x!==c):[...S.cols,c];LS.setItem('cols',JSON.stringify(S.cols));tb()}
+function tb(){const cs=CD.filter(c=>S.cols.includes(c[0])),q=S.q.toLowerCase(),L=S.m.filter(x=>(!S.mes||(x.f!=null&&mk(x.f)===S.mes))&&(!q||CD.some(c=>String(x[c[1]]??'').toLowerCase().includes(q)))).sort((a,b)=>(b.f||0)-(a.f||0)||b.n-a.n);
+ $('#t').innerHTML=`<thead><tr>${cs.map(c=>`<th class="${c[3]==='n'?'n':''}">${c[2]}</th>`).join('')}</tr></thead><tbody>${L.map(x=>`<tr onclick="oe(${x.n})">${cs.map(c=>{const v=x[c[1]];return`<td class="${c[3]==='n'?'n':''} ${c[1]==='imp'?(v<0?'ng':'ps'):''}">${c[3]==='d'?fes(v):c[3]==='n'?eur(v):h(v)}</td>`}).join('')}</tr>`).join('')}</tbody>`}
+function vCat(m){m.innerHTML=`<div class="bar"><button class="p" onclick="oc(0)">Añadir categoría</button></div><div class="w"><table><thead><tr><th>Categoría</th><th>Subcategoría</th><th class="n">Movimientos</th></tr></thead><tbody>${S.cats.slice().sort((a,b)=>a.cat.localeCompare(b.cat)||a.sub.localeCompare(b.sub)).map(p=>`<tr onclick="oc(${p.n})"><td>${h(p.cat)}</td><td>${h(p.sub)}</td><td class="n">${S.m.filter(x=>x.cat===p.cat&&x.sub===p.sub).length}</td></tr>`).join('')}</tbody></table></div>`}
+// ---- diálogos
+function dg(html){const d=$('#dlg');d.innerHTML=html;d.showModal()}function cl(){$('#dlg').close()}
+const cats=()=>[...new Set(S.cats.map(p=>p.cat))].sort((a,b)=>a.localeCompare(b)),subs=c=>[...new Set(S.cats.filter(p=>p.cat===c).map(p=>p.sub))].sort((a,b)=>a.localeCompare(b));
+const opts=(l,v)=>(l.includes(v)||!v?l:[...l,v]).map(o=>`<option ${o===v?'selected':''}>${h(o)}</option>`).join('');
+function csel(id,v,sv,onk,onl){return`<label>Categoría</label><select id="${id}k" onchange="${onk||`document.getElementById('${id}l').innerHTML='<option></option>'+opts(subs(this.value),'')`}"><option></option>${opts(cats(),v)}</select><label>Subcategoría</label><select id="${id}l" ${onl?`onchange="${onl}"`:''}><option></option>${opts(subs(v),sv)}</select>`}
+function oe(n){const x=rows(n),tp=[...new Set(['Gasto','Ingreso','No computable',...S.m.map(y=>y.tipo).filter(Boolean)])];
+ dg(`<h3 style="margin-top:0">Editar movimiento</h3>`+CD.map(([L,k,t,ty])=>L==='K'?csel('e',x.cat,x.sub):L==='L'?'':`<label>${t}</label>`+(L==='H'?`<select id="e${L}">${opts(tp,x.tipo)}</select>`:`<input id="e${L}" type="${ty==='d'?'date':ty==='n'?'number':'text'}" ${ty==='n'?'step="0.01"':''} value="${h(ty==='d'?(x.f==null?'':fd(x.f)):x[k]??'')}">`)).join('')+`<p class="mu">Importe negativo = gasto; positivo en un gasto = reembolso. Las columnas calculadas se actualizan al abrir en Excel.</p><div class="row"><button onclick="cl()">Cancelar</button><button onclick="sp(${n})">Dividir…</button><button class="p" onclick="se(${n})">Aplicar</button></div>`)}
+function se(n){const x=rows(n),ch={};
+ for(const[L,k,,ty]of CD){const el=L==='K'?$('#ek'):L==='L'?$('#el'):$('#e'+L),raw=el.value;let v;
+  if(ty==='n')v=raw===''?null:r2(+raw);else if(ty==='d')v=raw?Math.round((Date.parse(raw+'T00:00:00Z')-Date.UTC(1899,11,30))/864e5):null;else v=raw;
+  if((v??'')!==(x[k]??''))ch[L]=v}
+ if(Object.keys(ch).length){S.x1=editCells(S.x1,n,ch);S.dirty++}cl();refresh()}
+let SP=null;
+function sp(n){const x=rows(n);SP={n,t:Math.abs(x.imp),p:[{a:r2(Math.abs(x.imp)),c:x.cat,s:x.sub,m:x.com},{a:0,c:'',s:'',m:''}]};spv()}
+function spv(){const rem=r2(SP.t-SP.p.reduce((a,p)=>a+(+p.a||0),0));
+ dg(`<h3 style="margin-top:0">Dividir importe de ${eur(SP.t)}</h3>`+SP.p.map((p,i)=>`<div class="c" style="margin-top:10px"><b>Parte ${i+1}</b><label>Importe (positivo)</label><input type="number" step="0.01" value="${p.a}" onchange="SP.p[${i}].a=+this.value;spv()">${csel('s'+i,p.c,p.s,`SP.p[${i}].c=this.value;SP.p[${i}].s='';spv()`,`SP.p[${i}].s=this.value`)}<label>Comentario</label><input value="${h(p.m)}" onchange="SP.p[${i}].m=this.value"></div>`).join('')+`<p class="${rem===0?'ps':'ng'}">Pendiente de repartir: ${eur(rem)}</p><div class="row"><button onclick="SP.p.push({a:0,c:'',s:'',m:''});spv()">+ Parte</button><button onclick="oe(${SP.n})">Volver</button><button class="p" ${rem===0&&SP.p.every(p=>p.a>0)?'':'disabled'} onclick="ss()">Dividir</button></div>`)}
+function ss(){const x=rows(SP.n),sg=x.imp<0?-1:1,ps=SP.p.map(p=>({...p,a:r2(sg*p.a)}));let xml=S.x1;
+ ps.slice(1).forEach((p,i)=>{xml=addClone(xml,SP.n,S.last1+1+i,{A:`${x.id}.${i+2}`,E:p.a,F:null,K:p.c,L:p.s,M:p.m})});
+ S.x1=editCells(xml,SP.n,{A:`${x.id}.1`,E:ps[0].a,K:ps[0].c,L:ps[0].s,M:ps[0].m});S.last1+=ps.length-1;S.dirty+=ps.length;cl();refresh()}
+function oc(n){const p=S.cats.find(y=>y.n===n)||{cat:'',sub:''};dg(`<h3 style="margin-top:0">${n?'Editar':'Nueva'} categoría</h3><label>Categoría</label><input id="cc" list="cl" value="${h(p.cat)}"><datalist id="cl">${cats().map(c=>`<option>${h(c)}</option>`).join('')}</datalist><label>Subcategoría</label><input id="cs" value="${h(p.sub)}">${n?`<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ca" style="width:auto" checked>Aplicar también a los movimientos que usan esta combinación</label>`:''}<div class="row"><button onclick="cl()">Cancelar</button><button class="p" onclick="sc(${n})">Guardar</button></div>`)}
+function sc(n){const c=$('#cc').value.trim(),s=$('#cs').value.trim();if(!c||!s)return alert('Indica categoría y subcategoría.');
+ if(S.cats.some(p=>p.n!==n&&p.cat===c&&p.sub===s))return alert('Esa combinación ya existe.');
+ if(n){const o=S.cats.find(p=>p.n===n);S.x3=editCells(S.x3,n,{D:c,E:s});S.dirty++;
+  if($('#ca')?.checked&&(o.cat!==c||o.sub!==s))for(const x of S.m.filter(y=>y.cat===o.cat&&y.sub===o.sub)){S.x1=editCells(S.x1,x.n,{K:c,L:s});S.dirty++}}
+ else{const r=S.last3+1;S.x3=addRow(S.x3,r,'4:9',[['D',c,'2'],['E',s,'2']]);S.last3=r;S.dirty++}
+ cl();refresh()}
+boot();
+async function boot(){const q=new URLSearchParams(location.search);
+ try{if(q.get('code')){await tok({grant_type:'authorization_code',code:q.get('code'),code_verifier:LS.getItem('pk'),redirect_uri:REDIR});history.replaceState(null,'',REDIR)}
+  if(!LS.getItem('rt')){view();return}say('Cargando…');view();await loadFile();say('')}catch(e){say(e.message,1)}view()}
+</script></body></html>
