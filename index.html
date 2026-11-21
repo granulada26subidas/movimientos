@@ -57,12 +57,14 @@ function editCells(xml,n,ch){return xml.replace(rowRe(n),r=>{for(const[c,v]of Ob
 function addClone(xml,n,nn,ch){let r=xml.match(rowRe(n))[0].replace(new RegExp(`(<row r=")${n}"`),(m,p)=>p+nn+'"').replace(new RegExp(`(<c r="[A-Z]+)${n}"`,'g'),(m,p)=>p+nn+'"');
  for(const[c,v]of Object.entries(ch))r=setCell(r,nn,c,v);return xml.replace('</sheetData>',()=>nov(r)+'</sheetData>')}
 function addRow(xml,n,spans,cells){const r=`<row r="${n}" spans="${spans}">`+cells.map(([c,v,s])=>mkCell(c+n,s,v)).join('')+'</row>';return xml.replace('</sheetData>',()=>r+'</sheetData>')}
+function delPair(xml,n,last,ss){const R=parseSheet(xml,ss);for(let r=n;r<last;r++){const c=R[r+1]||{};xml=editCells(xml,r,{D:c.D??null,E:c.E??null})}
+ return xml.replace(rowRe(last),row=>{row=row.replace(new RegExp(`<c r="[DE]${last}"[^>]*?(?:/>|>[\\s\\S]*?</c>)`,'g'),'');return/<c /.test(row)?row:''})}
 async function locate(z){const T={};
  for(const f of Object.keys(z.files).filter(f=>/^xl\/tables\/table\d+\.xml$/.test(f))){const x=await z.file(f).async('string');T[(x.match(/<table [^>]*?\bname="([^"]+)"/)||[])[1]]={tf:f,ref:x.match(/\bref="([^"]+)"/)[1],xml:x}}
  for(const f of Object.keys(z.files).filter(f=>/^xl\/worksheets\/_rels\/sheet\d+\.xml\.rels$/.test(f))){const x=await z.file(f).async('string');for(const t of Object.values(T))if(x.includes('/'+t.tf.split('/').pop()+'"'))t.sf='xl/worksheets/'+f.split('/').pop().replace('.rels','')}
  return T}
-async function pack(S){const z=S.zip,t1=S.t1,t3=S.t3,dim=(x,l)=>x.replace(/<dimension ref="([A-Z]+\d+):([A-Z]+)\d+"\/>/,(m,a,b)=>`<dimension ref="${a}:${b}${l}"/>`);
- z.file(t1.sf,dim(S.x1,S.last1));z.file(t3.sf,dim(S.x3,S.last3));
+async function pack(S){const z=S.zip,t1=S.t1,t3=S.t3,dim=x=>x.replace(/<dimension ref="([A-Z]+\d+):([A-Z]+)\d+"\/>/,(m,a,b)=>`<dimension ref="${a}:${b}${Math.max(...[...x.matchAll(/<row r="(\d+)"/g)].map(r=>+r[1]))}"/>`);
+ z.file(t1.sf,dim(S.x1));z.file(t3.sf,dim(S.x3));
  z.file(t1.tf,S.tx1.split(t1.ref).join(t1.ref.replace(/\d+$/,S.last1)));
  const[,c1,c2,o]=t3.ref.match(/([A-Z]+)\d+:([A-Z]+)(\d+)/);
  z.file(t3.tf,S.tx3.split(`:${c2}${o}"`).join(`:${c2}${S.last3}"`).split(`:${c1}${o}"`).join(`:${c1}${S.last3}"`));
@@ -157,7 +159,10 @@ function spv(){const rem=r2(SP.t-SP.p.reduce((a,p)=>a+(+p.a||0),0));
 function ss(){const x=rows(SP.n),sg=x.imp<0?-1:1,ps=SP.p.map(p=>({...p,a:r2(sg*p.a)}));let xml=S.x1;
  ps.slice(1).forEach((p,i)=>{xml=addClone(xml,SP.n,S.last1+1+i,{A:`${x.id}.${i+2}`,E:p.a,F:null,K:p.c,L:p.s,M:p.m})});
  S.x1=editCells(xml,SP.n,{A:`${x.id}.1`,E:ps[0].a,K:ps[0].c,L:ps[0].s,M:ps[0].m});S.last1+=ps.length-1;S.dirty+=ps.length;cl();refresh()}
-function oc(n){const p=S.cats.find(y=>y.n===n)||{cat:'',sub:''};dg(`<h3 style="margin-top:0">${n?'Editar':'Nueva'} categoría</h3><label>Categoría</label><input id="cc" list="cl" value="${h(p.cat)}"><datalist id="cl">${cats().map(c=>`<option>${h(c)}</option>`).join('')}</datalist><label>Subcategoría</label><input id="cs" value="${h(p.sub)}">${n?`<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ca" style="width:auto" checked>Aplicar también a los movimientos que usan esta combinación</label>`:''}<div class="row"><button onclick="cl()">Cancelar</button><button class="p" onclick="sc(${n})">Guardar</button></div>`)}
+function oc(n){const p=S.cats.find(y=>y.n===n)||{cat:'',sub:''};dg(`<h3 style="margin-top:0">${n?'Editar':'Nueva'} categoría</h3><label>Categoría</label><input id="cc" list="cl" value="${h(p.cat)}"><datalist id="cl">${cats().map(c=>`<option>${h(c)}</option>`).join('')}</datalist><label>Subcategoría</label><input id="cs" value="${h(p.sub)}">${n?`<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ca" style="width:auto" checked>Aplicar también a los movimientos que usan esta combinación</label>`:''}<div class="row">${n?`<button style="color:var(--ng)" onclick="dc(${n})">Eliminar</button>`:''}<button onclick="cl()">Cancelar</button><button class="p" onclick="sc(${n})">Guardar</button></div>`)}
+function dc(n){const p=S.cats.find(y=>y.n===n),u=S.m.filter(x=>x.cat===p.cat&&x.sub===p.sub).length;
+ if(!confirm(`¿Eliminar «${p.cat} › ${p.sub}»?`+(u?` ${u} movimientos la usan y conservarán ese texto, pero ya no aparecerá en las listas.`:'')))return;
+ S.x3=delPair(S.x3,n,S.last3,S.ss);S.last3--;S.dirty++;cl();refresh()}
 function sc(n){const c=$('#cc').value.trim(),s=$('#cs').value.trim();if(!c||!s)return alert('Indica categoría y subcategoría.');
  if(S.cats.some(p=>p.n!==n&&p.cat===c&&p.sub===s))return alert('Esa combinación ya existe.');
  if(n){const o=S.cats.find(p=>p.n===n);S.x3=editCells(S.x3,n,{D:c,E:s});S.dirty++;
